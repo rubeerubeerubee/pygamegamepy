@@ -284,20 +284,30 @@ class Game:
         draw_text("Press ESC to exit.", WIDTH//2, 480, center=True,color=(255,255,255))
 
     def run_menu(self):
-        screen.blit(self.bg, (0,0))            # พื้นหลังรูป
-        draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)  # ⬅️ กรอบล้อม
-        draw_text("เลือกรูปแบบแบบทดสอบ", WIDTH//2, 120, center=True, font=BIG)
-        mouse = self.mouse_pos
-        clicked = self.just_clicked
-        if draw_raised_button("แปลคำศัพท์", pygame.Rect(WIDTH//2-120, 370, 240, 60), mouse, clicked):
-            self.sounds["cilck"].play() 
-            items = randomize_lesson(LESSON_choices, k=20, seed=random.randint(0,9999)) 
-            self.engine = QuestionEngine(items)
-            self.feedback_timer = 0
-            self.text_buffer = ""
-            self.state = QUIZ
-        if draw_raised_button("แปลประโยค", pygame.Rect(WIDTH//2-120, 500, 240, 60), mouse, clicked):
-            self.state = QUIZ
+    screen.blit(self.bg, (0,0))
+    draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)
+    draw_text("เลือกรูปแบบแบบทดสอบ", WIDTH//2, 120, center=True, font=BIG)
+    mouse = self.mouse_pos
+    clicked = self.just_clicked
+
+    # --- Word translation ---
+    if draw_raised_button("แปลคำศัพท์", pygame.Rect(WIDTH//2-120, 370, 240, 60), mouse, clicked):
+        self.sounds["cilck"].play()
+        items = randomize_lesson(LESSON_choices, k=20, seed=random.randint(0,9999))
+        self.engine = QuestionEngine(items)
+        self.feedback_timer = 0
+        self.text_buffer = ""
+        self.state = QUIZ
+
+    # --- Sentence translation ---
+    if draw_raised_button("แปลประโยค", pygame.Rect(WIDTH//2-120, 500, 240, 60), mouse, clicked):
+        self.sounds["cilck"].play()
+        items = randomize_lesson(LESSON_sentences, k=10, seed=random.randint(0,9999))
+        self.engine = QuestionEngine(items)
+        self.feedback_timer = 0
+        self.text_buffer = ""
+        self.state = QUIZ
+        
     def run_quiz(self):
         screen.blit(self.bg, (0,0))            # พื้นหลังรูป
         draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)  # ⬅️ กรอบล้อม
@@ -478,3 +488,4 @@ class Game:
 
 if __name__ == "__main__":
     Game().run()
+
