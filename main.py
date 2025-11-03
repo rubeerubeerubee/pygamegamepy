@@ -125,6 +125,8 @@ def load_lessons_json(path: str):
         raise ValueError("lessons file must be a JSON list")
     return data
 LESSON_choices = load_lessons_json("assets/lessons/choices.json")
+LESSON_sentence = load_lessons_json("assets/lessons/sentence.json")
+# ---------- กลไกเกม ----------
 
 @dataclass
 class Progress:
@@ -181,8 +183,8 @@ class QuestionEngine:
     
     def done(self):
         return self.progress.current_index >= len(self.items) or self.progress.lives <= 0
-    
-LOBBY, MENU, QUIZ, RESULT = 'LOBBY','MENU','QUIZ','RESULT'
+
+LOBBY, MENU, QUIZ, SENTENCE, RESULT = 'LOBBY','MENU','QUIZ','SENTENCE','RESULT'
 
 class Game:
     def __init__(self):
@@ -284,30 +286,30 @@ class Game:
         draw_text("Press ESC to exit.", WIDTH//2, 480, center=True,color=(255,255,255))
 
     def run_menu(self):
-    screen.blit(self.bg, (0,0))
-    draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)
-    draw_text("เลือกรูปแบบแบบทดสอบ", WIDTH//2, 120, center=True, font=BIG)
-    mouse = self.mouse_pos
-    clicked = self.just_clicked
+        screen.blit(self.bg, (0,0))
+        draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)
+        draw_text("เลือกรูปแบบแบบทดสอบ", WIDTH//2, 120, center=True, font=BIG)
+        mouse = self.mouse_pos
+        clicked = self.just_clicked
 
     # --- Word translation ---
-    if draw_raised_button("แปลคำศัพท์", pygame.Rect(WIDTH//2-120, 370, 240, 60), mouse, clicked):
-        self.sounds["cilck"].play()
-        items = randomize_lesson(LESSON_choices, k=20, seed=random.randint(0,9999))
-        self.engine = QuestionEngine(items)
-        self.feedback_timer = 0
-        self.text_buffer = ""
-        self.state = QUIZ
+        if draw_raised_button("แปลคำศัพท์", pygame.Rect(WIDTH//2-120, 370, 240, 60), mouse, clicked):
+            self.sounds["cilck"].play()
+            items = randomize_lesson(LESSON_choices, k=20, seed=random.randint(0,9999))
+            self.engine = QuestionEngine(items)
+            self.feedback_timer = 0
+            self.text_buffer = ""
+            self.state = QUIZ
 
-    # --- Sentence translation ---
-    if draw_raised_button("แปลประโยค", pygame.Rect(WIDTH//2-120, 500, 240, 60), mouse, clicked):
-        self.sounds["cilck"].play()
-        items = randomize_lesson(LESSON_sentences, k=10, seed=random.randint(0,9999))
-        self.engine = QuestionEngine(items)
-        self.feedback_timer = 0
-        self.text_buffer = ""
-        self.state = QUIZ
-        
+        # --- Sentence translation ---
+        if draw_raised_button("แปลประโยค", pygame.Rect(WIDTH//2-120, 500, 240, 60), mouse, clicked):
+            self.sounds["cilck"].play()
+            items = randomize_lesson(LESSON_sentence, k=10, seed=random.randint(0,9999))
+            self.engine = QuestionEngine(items)
+            self.feedback_timer = 0
+            self.text_buffer = ""
+            self.state = SENTENCE
+            
     def run_quiz(self):
         screen.blit(self.bg, (0,0))            # พื้นหลังรูป
         draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)  # ⬅️ กรอบล้อม
@@ -390,18 +392,11 @@ class Game:
                     self.mode_review = False
             if self.mode_review:
                 self.draw_feedback_bar()
-                
-        elif q["type"] == "sentence": #ยังทำไม่เสร็จ (แบบแปลประโยค)
-            box = pygame.Rect(WIDTH//2-220, 220, 440, 60)
-            pygame.draw.rect(screen, (40,40,40), box, border_radius=8)
-            pygame.draw.rect(screen, (120,120,120), box, 2, border_radius=8)
-            draw_text(self.text_buffer or "พิมพ์คำตอบที่นี่...", box.x+12, box.y+16, color=(200,200,200))
-            mouse = pygame.mouse.get_pos()
-            clicked = pygame.mouse.get_pressed()[0]
-            submit = pygame.Rect(WIDTH//2-80, 310, 160, 50)
-            #if draw_button("ส่งคำตอบ", submit, mouse, clicked, enabled=len(self.text_buffer)>0):
-                ##self.feedback_color = (10,80,40) if good else (90,20,20)
-                ##self.text_buffer = ""
+
+    def run_sentence(self):
+        if not hasattr(self, "sentence_sound_played") or not self.sentence_sound_played:
+            self.sounds["sentence"].play()
+            self.sentence_sound_played = True
 
     def run_result(self):
         if not hasattr(self, "result_sound_played") or not self.result_sound_played:
@@ -488,4 +483,3 @@ class Game:
 
 if __name__ == "__main__":
     Game().run()
-
