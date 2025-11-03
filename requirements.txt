@@ -1,0 +1,11 @@
+certifi==2025.10.5
+charset-normalizer==3.4.4
+click==8.1.8
+colorama==0.4.6
+dataclasses==0.6
+gTTS==2.5.4
+idna==3.11
+pygame==2.6.1
+requests==2.32.5
+typing_extensions==4.15.0
+urllib3==2.5.0
