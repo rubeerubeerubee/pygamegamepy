@@ -2,8 +2,13 @@ import pygame, sys, os, json, random, math
 from dataclasses import dataclass, field
 from typing import List, Dict, Any
 from copy import deepcopy
-from gtts import gTTS
+try:
+    from gtts import gTTS
+except ImportError:
+    gTTS = None
+    print("Warning: gTTS (Google Text-to-Speech) is not installed. Voice features will be disabled.")
 
+# ---------- การตั้งค่าเบื้องต้น ----------
 pygame.init()
 WIDTH, HEIGHT = 1100,800
 screen = pygame.display.set_mode((WIDTH,HEIGHT))
@@ -375,7 +380,8 @@ class Game:
                     self.mode_review = False
             if self.mode_review:
                 self.draw_feedback_bar()
-        elif q["type"] == "type": #ยังทำไม่เสร็จ (แบบแปลประโยค)
+                
+        elif q["type"] == "sentence": #ยังทำไม่เสร็จ (แบบแปลประโยค)
             box = pygame.Rect(WIDTH//2-220, 220, 440, 60)
             pygame.draw.rect(screen, (40,40,40), box, border_radius=8)
             pygame.draw.rect(screen, (120,120,120), box, 2, border_radius=8)
