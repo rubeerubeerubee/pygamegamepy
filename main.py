@@ -126,6 +126,7 @@ def load_lessons_json(path: str):
     return data
 LESSON_choices = load_lessons_json("assets/lessons/choices.json")
 LESSON_sentence = load_lessons_json("assets/lessons/sentence.json")
+LESSON_word_bank = load_lessons_json("assets/lessons/word_bank.json")
 # ---------- กลไกเกม ----------
 
 @dataclass
@@ -184,7 +185,7 @@ class QuestionEngine:
     def done(self):
         return self.progress.current_index >= len(self.items) or self.progress.lives <= 0
 
-LOBBY, MENU, QUIZ, SENTENCE, RESULT = 'LOBBY','MENU','QUIZ','SENTENCE','RESULT'
+LOBBY, MENU, QUIZ, SENTENCE, WORD_BANK, RESULT = 'LOBBY','MENU','QUIZ','SENTENCE','WORD_BANK','RESULT'
 
 class Game:
     def __init__(self):
@@ -205,6 +206,9 @@ class Game:
         os.makedirs(self.voice_dir, exist_ok=True)
         self.mode_review = False   # True = เพิ่งตรวจเสร็จ กำลังรอให้กด "ไปต่อ"
         self.last_good = None
+        self.chosen_words = []  # สำหรับโหมด Word Bank
+        self.current_word_bank = []  # คำที่ห้เลือก
+         # โหลดเสียงต่างๆ
         self.sounds = {
                         "correct": pygame.mixer.Sound("assets/sounds/correct.mp3"),
                         "wrong": pygame.mixer.Sound("assets/sounds/wrong.mp3"),
@@ -309,6 +313,20 @@ class Game:
             self.feedback_timer = 0
             self.text_buffer = ""
             self.state = SENTENCE
+
+        # --- Word bank ---
+        if draw_raised_button("สร้างประโยค (Word Bank)", pygame.Rect(WIDTH//2-140, 630, 280, 60), mouse, clicked):
+            self.sounds["cilck"].play()
+            items = randomize_lesson(LESSON_word_bank, k=10) # สุ่มมา 10 ข้อ
+            self.engine = QuestionEngine(items)
+            
+            # รีเซ็ตค่าสำหรับโหมดใหม่
+            self.feedback_timer = 0
+            self.text_buffer = ""
+            self.chosen_words = [] # <-- (ต้องเพิ่มตัวแปรนี้ใน __init__)
+            self.current_word_bank = [] # <-- (ต้องเพิ่มตัวแปรนี้ใน __init__)
+            
+            self.state = WORD_BANK
             
     def run_quiz(self):
         screen.blit(self.bg, (0,0))            # พื้นหลังรูป
@@ -392,6 +410,109 @@ class Game:
                     self.mode_review = False
             if self.mode_review:
                 self.draw_feedback_bar()
+    
+    def run_word_bank(self):
+        screen.blit(self.bg, (0,0)) # หรือ self.bg2
+        draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)
+        self.draw_header()
+
+        q = self.engine.current()
+        if not q:
+            self.state = RESULT
+            return
+
+        # 0. เช็กว่าขึ้นข้อใหม่หรือยัง ถ้าใช่ ให้สุ่มคลังคำใหม่
+        # (คุณต้องเพิ่ม self.last_q_index = -1 ใน __init__ ด้วย)
+        if not hasattr(self, 'last_q_index') or self.last_q_index != self.engine.progress.current_index:
+            self.current_word_bank = deepcopy(q["word_bank"])
+            random.shuffle(self.current_word_bank)
+            self.chosen_words = []
+            self.last_q_index = self.engine.progress.current_index
+
+        mouse = self.mouse_pos
+        clicked = self.just_clicked
+
+        # 1. วาดคำถาม (รูปภาพ)
+        draw_text(q["prompt"], WIDTH//2, 120, center=True, font=BIG)
+        # (คุณต้องเพิ่มโค้ดโหลดและวาดรูปภาพจาก q["image"] ที่นี่)
+        # (ดูตัวอย่างจาก run_quiz ของคุณได้เลย)
+        frame_rect = pygame.Rect(WIDTH//2 - 250, 160, 500, 200) # กรอบรูป
+        pygame.draw.rect(screen, (255, 255, 255), frame_rect, border_radius=28)
+        # (โค้ดวาดรูป q["image"] ลงใน frame_rect)
+
+        # 2. วาดกล่องคำตอบ (ที่ว่างๆ)
+        answer_box_rect = pygame.Rect(WIDTH//2 - 400, 380, 800, 70)
+        pygame.draw.rect(screen, (255, 255, 255), answer_box_rect, border_radius=12)
+        pygame.draw.rect(screen, (220, 220, 220), answer_box_rect, width=2, border_radius=12)
+        
+        # วาดคำที่เลือกแล้ว (self.chosen_words) ลงในกล่องนี้
+        built_sentence = " ".join(self.chosen_words)
+        draw_text(built_sentence, answer_box_rect.x + 15, answer_box_rect.centery, center=False, font=MED)
+
+        # 3. วาดคลังคำ (ปุ่มที่คลิกได้)
+        word_x, word_y = WIDTH//2 - 400, 480
+        word_buttons = [] # เก็บ (rect, word)
+        
+        # วาดปุ่ม "Reset" (เอาคำคืนทั้งหมด)
+        reset_rect = pygame.Rect(WIDTH - 150, answer_box_rect.y, 100, 60)
+        if draw_raised_button("Reset", reset_rect, mouse, clicked, color=(220, 220, 220), text_color=(0,0,0)):
+             # ย้ายคำทั้งหมดจาก chosen_words กลับไป current_word_bank
+             self.current_word_bank.extend(self.chosen_words)
+             self.chosen_words.clear()
+             random.shuffle(self.current_word_bank) # สุ่มใหม่
+
+        # วาดปุ่มคลังคำที่เหลือ
+        max_width = WIDTH - 100
+        for i, word in enumerate(self.current_word_bank):
+            # สร้าง Rect ชั่วคราวเพื่อวัดขนาด
+            temp_surf = FONT.render(word, True, (0,0,0))
+            btn_w = temp_surf.get_width() + 30 # เพิ่ม padding
+            btn_h = 55
+            
+            if word_x + btn_w > max_width: # ถ้าล้นบรรทัด
+                word_x = WIDTH//2 - 400
+                word_y += btn_h + 10 # ขึ้นบรรทัดใหม่
+                
+            btn_rect = pygame.Rect(word_x, word_y, btn_w, btn_h)
+            
+            if not self.mode_review: # ถ้ายังไม่ตรวจ
+                if draw_raised_button(word, btn_rect, mouse, clicked, text_color=(41, 68, 99),color=(241, 245, 249)):
+                    # ย้ายคำจาก bank ไป answer
+                    self.chosen_words.append(word)
+                    self.current_word_bank.pop(i) # เอาคำที่ index i ออก
+                    break # หยุด loop ทันทีที่คลิก (เพราะ list เปลี่ยนขนาด)
+            else: # ถ้าตรวจแล้ว (โหมดรีวิว)
+                # วาดปุ่มเฉยๆ แต่คลิกไม่ได้
+                draw_raised_button(word, btn_rect, mouse, False, enabled=False, text_color=(41, 68, 99),color=(241, 245, 249))
+
+            word_x += btn_w + 10 # เลื่อนไปทางขวา
+
+        # 4. ปุ่ม "ส่งคำตอบ" / "ไปต่อ"
+        submit_rect = pygame.Rect(WIDTH//2 - 120, 700, 240, 60)
+        if not self.mode_review:
+            can_submit = len(self.chosen_words) > 0
+            if draw_raised_button("ส่งคำตอบ", submit_rect, mouse, clicked,
+                                  enabled=can_submit, color=(70,200,90,), font=FONT):
+                
+                built_sentence = " ".join(self.chosen_words).strip().lower()
+                correct_sentence = q["answer_sentence"].strip().lower()
+                
+                good = (built_sentence == correct_sentence)
+                self.last_good = good
+                (self.sounds["correct"] if good else self.sounds["wrong"]).play()
+                self.engine.progress.correct() if good else self.engine.progress.wrong() # อัปเดตคะแนน
+                self.mode_review = True
+        else:
+            if draw_raised_button("ไปต่อ", submit_rect, mouse, clicked,
+                                  enabled=True, color=(60,150,255), font=FONT):
+                self.engine.advance()
+                self.mode_review = False
+                # (ไม่ต้องรีเซ็ต chosen_words/current_word_bank ที่นี่
+                # (เพราะ logic ข้อ 0. ด้านบนสุดจะจัดการเอง)
+
+        # 5. วาด Feedback Bar
+        if self.mode_review:
+            self.draw_feedback_bar() # ฟังก์ชันเดิมของคุณใช้ได้เลย!
 
     def run_sentence(self):
         if not hasattr(self, "sentence_sound_played") or not self.sentence_sound_played:
@@ -474,6 +595,11 @@ class Game:
             elif self.state == QUIZ:
                 if self.engine.done() and not self.mode_review:
                     self.state = RESULT
+                elif self.state == WORD_BANK:
+                    if self.engine.done() and not self.mode_review:
+                        self.state = RESULT
+                    else:
+                        self.run_word_bank()
                 else:
                     self.run_quiz()
             elif self.state == RESULT:
