@@ -171,7 +171,7 @@ def load_lessons_json(path: str):
         return []
 LESSON_choices = load_lessons_json("assets/lessons/choices.json")
 LESSON_sentence = load_lessons_json("assets/lessons/sentence.json")
-LESSON_word_bank = load_lessons_json("assets/lessons/word_bank.json")
+LESSON_construct = load_lessons_json("assets/lessons/construct.json")
 
 # ตรวจสอบให้แต่ละข้อมี id คงที่ (ใช้ติดตามการใช้งาน/ความไม่ซ้ำ)
 def _ensure_ids(lessons, prefix: str):
@@ -183,7 +183,7 @@ def _ensure_ids(lessons, prefix: str):
 
 _ensure_ids(LESSON_choices, 'choice')
 _ensure_ids(LESSON_sentence, 'sentence')
-_ensure_ids(LESSON_word_bank, 'wordbank')
+_ensure_ids(LESSON_construct, 'construct')
 # ---------- กลไกเกม ----------
 
 @dataclass
@@ -243,7 +243,7 @@ class QuestionEngine:
     def done(self):
         return self.progress.current_index >= len(self.items) or self.progress.lives <= 0
 
-LOBBY, MENU, QUIZ, SENTENCE, WORD_BANK, RESULT = 'LOBBY','MENU','QUIZ','SENTENCE','WORD_BANK','RESULT'
+LOBBY, MENU, QUIZ, SENTENCE, CONSTRUCT, RESULT = 'LOBBY','MENU','QUIZ','SENTENCE','CONSTRUCT','RESULT'
 
 class Game:
     def __init__(self):
@@ -263,11 +263,11 @@ class Game:
         os.makedirs(self.voice_dir, exist_ok=True)
         self.mode_review = False   # เมื่อเป็น True หมายถึงเพิ่งตรวจเสร็จ กำลังรอให้กด "ไปต่อ"
         self.last_good = None
-        self.chosen_words = []  # สำหรับโหมด Word Bank
-        self.current_word_bank = []  # คำที่ห้เลือก
+        self.chosen_words = []  # สำหรับโหมดสร้างประโยค
+        self.current_construct = []  # คำที่ห้เลือก
         self.sentence_focused = False
         self.seen_sentence_ids = set()
-        self.seen_wordbank_ids = set()
+        self.seen_construct_ids = set()
         # ความถี่การกระพริบของเคอร์เซอร์เมื่อพิมพ์ 
         self.cursor_blink_ms = 500
         # โหลดเสียงต่างๆ
@@ -369,25 +369,25 @@ class Game:
                 self.sentence_sound_played = False
                 self.state = SENTENCE
 
-        # --- Word bank ---
-        if draw_raised_button("สร้างประโยค (Word Bank)", pygame.Rect(WIDTH//2-140, 630, 280, 60), mouse, clicked):
+        # สร้างประโยค
+        if draw_raised_button("สร้างประโยค", pygame.Rect(WIDTH//2-140, 630, 280, 60), mouse, clicked):
             self.sounds["cilck"].play()
-            # อย่าเปลี่ยนถ้าไม่มีบทเรียนแบบ Word Bank
-            if not LESSON_word_bank:
-                print("No word-bank lessons found; staying in menu")
+            # อย่าเปลี่ยนถ้าไม่มีบทเรียนแบบสร้างประโยค
+            if not LESSON_construct:
+                print("No construct lessons found; staying in menu")
             else:
-                # เลือกข้อ Word Bank ที่ยังไม่เคยเห็นเพื่อหลีกเลี่ยงการซ้ำ
-                items = pick_without_seen(LESSON_word_bank, self.seen_wordbank_ids, 10)
+                # เลือกข้อที่ยังไม่เคยเห็นเพื่อหลีกเลี่ยงการซ้ำ
+                items = pick_without_seen(LESSON_construct, self.seen_construct_ids, 10)
                 if not items:
-                    print("No word-bank items available; staying in menu")
+                    print("No construct items available; staying in menu")
                 else:
                     self.engine = QuestionEngine(items)
                     # รีเซ็ตค่าสำหรับโหมดใหม่
                     self.feedback_timer = 0
                     self.text_buffer = ""
                     self.chosen_words = [] # <-- (ต้องเพิ่มตัวแปรนี้ใน __init__)
-                    self.current_word_bank = [] # <-- (ต้องเพิ่มตัวแปรนี้ใน __init__)
-                    self.state = WORD_BANK
+                    self.current_construct = [] # <-- (ต้องเพิ่มตัวแปรนี้ใน __init__)
+                    self.state = CONSTRUCT
             
     def draw_header(self):
         pygame.draw.rect(screen, (148, 163, 184), (0,0,WIDTH,80))
@@ -486,7 +486,7 @@ class Game:
             if self.mode_review:
                 self.draw_feedback_bar()
     
-    def run_word_bank(self):
+    def run_construct(self):
         screen.blit(self.bg, (0,0)) # หรือ self.bg2
         draw_screen_frame(pad=50, color=(224, 234, 247), width=3, radius=28)
         self.draw_header()
@@ -499,18 +499,18 @@ class Game:
         # 0. เช็กว่าขึ้นข้อใหม่หรือยัง ถ้าใช่ ให้สุ่มคลังคำใหม่
         # (คุณต้องเพิ่ม self.last_q_index = -1 ใน __init__ ด้วย)
         if not hasattr(self, 'last_q_index') or self.last_q_index != self.engine.progress.current_index:
-            self.current_word_bank = deepcopy(q["word_bank"])
-            random.shuffle(self.current_word_bank)
+            self.current_construct = deepcopy(q["construct"])
+            random.shuffle(self.current_construct)
             self.chosen_words = []
             self.last_q_index = self.engine.progress.current_index
-            # เล่นประโยคทั้งประโยค (TTS) เมื่อขึ้นข้อ Word Bank ใหม่
+            # เล่นประโยคทั้งประโยค (TTS) เมื่อขึ้นข้อใหม่
             try:
                 # พยายามเฉพาะเมื่อ gTTS มีอยู่
                 if gTTS is not None:
                     # สร้าง/เล่นไฟล์เสียงประโยค
                     self.speak_word(q.get("answer_sentence", ""), lang='en')
             except Exception as e:
-                print("Word-bank TTS error:", e)
+                print("Construct TTS error:", e)
 
         mouse = self.mouse_pos
         clicked = self.just_clicked
@@ -538,7 +538,7 @@ class Game:
         
         # วาดคำที่เลือกแล้ว (self.chosen_words) ลงในกล่องนี้
         built_sentence = " ".join(self.chosen_words)
-        draw_text(built_sentence, answer_box_rect.x + 15, answer_box_rect.centery, center=False, font=MED)
+        draw_text(built_sentence, answer_box_rect.x + 15, answer_box_rect.y + 15 , answer_box_rect.centery, center=False, font=MED)
 
         # 3. วาดคลังคำ (ปุ่มที่คลิกได้)
         word_x, word_y = WIDTH//2 - 400, 480
@@ -547,14 +547,14 @@ class Game:
         # วาดปุ่ม "Reset" (เอาคำคืนทั้งหมด)
         reset_rect = pygame.Rect(WIDTH - 150, answer_box_rect.y, 100, 60)
         if draw_raised_button("Reset", reset_rect, mouse, clicked, color=(220, 220, 220), text_color=(0,0,0)):
-             # ย้ายคำทั้งหมดจาก chosen_words กลับไป current_word_bank
-             self.current_word_bank.extend(self.chosen_words)
+             # ย้ายคำทั้งหมดจาก chosen_words กลับไป current_construct
+             self.current_construct.extend(self.chosen_words)
              self.chosen_words.clear()
-             random.shuffle(self.current_word_bank) # สุ่มใหม่
+             random.shuffle(self.current_construct) # สุ่มใหม่
 
         # วาดปุ่มคลังคำที่เหลือ
         max_width = WIDTH - 100
-        for i, word in enumerate(self.current_word_bank):
+        for i, word in enumerate(self.current_construct):
             # สร้าง Rect ชั่วคราวเพื่อวัดขนาด
             temp_surf = FONT.render(word, True, (0,0,0))
             btn_w = temp_surf.get_width() + 30 # เพิ่ม padding
@@ -574,9 +574,9 @@ class Game:
                             self.speak_word(word, lang='en')
                     except Exception:
                         pass
-                    # ย้ายคำจาก bank ไป answer
+                    # ย้ายคำจาก construct ไป answer
                     self.chosen_words.append(word)
-                    self.current_word_bank.pop(i) # เอาคำที่ index i ออก
+                    self.current_construct.pop(i) # เอาคำที่ index i ออก
                     break # หยุด loop ทันทีที่คลิก (เพราะ list เปลี่ยนขนาด)
             else: # ถ้าตรวจแล้ว (โหมดรีวิว)
                 # วาดปุ่มเฉยๆ แต่คลิกไม่ได้
@@ -605,7 +605,7 @@ class Game:
                 self.engine.advance()
                 self.mode_review = False
                 self.chosen_words = []
-                self.current_word_bank = []
+                self.current_construct = []
     def run_sentence(self):
     # UI หลักของโหมดพิมพ์ประโยค: แสดงคำถาม รูป (ถ้ามี),
     # กล่องป้อนคำ และปุ่มส่ง/ไปต่อ พร้อมแถบแสดงผล
@@ -758,7 +758,7 @@ class Game:
                     elif self.state == MENU: self.state = LOBBY
                     elif self.state == QUIZ: self.state = LOBBY
                     elif self.state == SENTENCE: self.state = MENU
-                    elif self.state == WORD_BANK: self.state = MENU
+                    elif self.state == CONSTRUCT: self.state = MENU
                     elif self.state == RESULT: self.state = LOBBY
                 if self.state == RESULT and e.key == pygame.K_RETURN:
                     self.__init__()
@@ -816,14 +816,14 @@ class Game:
                         self.run_sentence()
                 else:
                     self.run_sentence()
-            elif self.state == WORD_BANK:
+            elif self.state == CONSTRUCT:
                 if self.engine.done():
                     if self.engine.progress.lives <= 0 or not self.mode_review:
                         self.state = RESULT
                     else:
-                        self.run_word_bank()
+                        self.run_construct()
                 else:
-                    self.run_word_bank()
+                    self.run_construct()
             elif self.state == RESULT:
                 self.run_result()
 
